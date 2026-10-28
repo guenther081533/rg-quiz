@@ -71,8 +71,8 @@ details ul { padding-left: 18px; line-height: 1.5; }
 .hero .logo { background: var(--navy); padding: 28px 24px 22px; }
 .hero .logo img { width: 72%; max-width: 300px; height: auto; display: block; }
 .hero .logo .eyebrow { color: var(--teal-light); margin: 18px 0 0; }
-.hero .car { background: var(--studio); display: flex; justify-content: center; }
-.hero .car img { width: 100%; max-width: 520px; height: auto; display: block; }
+.hero .car { background: var(--studio); }
+.hero .car img { width: 100%; height: auto; display: block; }
 
 /* Frage */
 .qhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 700; }
