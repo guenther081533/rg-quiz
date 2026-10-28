@@ -13,71 +13,93 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="brand"><b>R&amp;G</b><span>Zeit für Neues.</span></div>
   <div id="app"><div class="card center"><p class="pulse">Verbinde …</p></div></div>
 </div>
 <script src="app.js"></script>
 <script>
 const app = document.getElementById('app');
+const SYM = ['▲', '◆', '●', '■'];
 let state = null;
-let offset = 0;                          // Serverzeit minus Gerätezeit
-let me = store.get('quiz.me');           // { token, name, round }
-let result = store.get('quiz.result');   // { score, total, duration_ms, round }
-let questions = null;
-let answers = [];                        // je Frage: Index der Originalantwort oder null
-let perms = [];                          // je Frage: Anzeigereihenfolge der Antworten
-let cur = 0;                             // 0..n-1 Frage, n = Übersicht
+let offset = 0;                      // Serverzeit minus Gerätezeit
+let me = store.get('quiz.me');       // { token, nickname, round }
+let pending = null;                  // { pos, choice } – Antwort unterwegs
 let busy = false;
-let loading = false;
 let errorMsg = '';
-let timerHandle = null;
-let advanceHandle = null;
+let lastKey = '';
+let tickHandle = null;
 
 const TERMS = `
 <details><summary>Teilnahmebedingungen und Datenschutz</summary>
 <ul>
   <li>Veranstalter des Quiz ist die R&amp;G Wirtschaftskanzlei GmbH, Hagen.</li>
   <li>Teilnahme ab 18 Jahren, nur für Gäste des Immobilienstammtischs am 28.10.2026 vor Ort. Pro Person und Handynummer eine Teilnahme.</li>
-  <li>Es gewinnt, wer die meisten Fragen richtig beantwortet. Bei Gleichstand entscheidet die kürzere Zeit. Die Zeit misst der Server ab dem gemeinsamen Start.</li>
+  <li>Die Fragen werden einzeln freigegeben, für jede gibt es ein Zeitlimit. Es gewinnt, wer die meisten Fragen richtig beantwortet. Bei Gleichstand entscheidet die kürzere Antwortzeit über alle richtigen Antworten. Die Zeit misst der Server.</li>
+  <li>Auf der Leinwand erscheint nur dein Nickname. Bitte wähle einen fairen Nickname, der Veranstalter kann unpassende Nicknames ersetzen. Den echten Namen der Gewinnerin oder des Gewinners geben wir am Ende bekannt.</li>
   <li>Gewinn ist ein Gutschein für eine Probefahrt im Porsche Zentrum nach Terminabsprache. Voraussetzung ist ein gültiger Führerschein; es gelten die Bedingungen des Porsche Zentrums. Keine Barauszahlung.</li>
   <li>Der Rechtsweg ist ausgeschlossen.</li>
 </ul>
-<p><b>Datenschutz:</b> Name und Handynummer verwenden wir nur für dieses Quiz und um die Gewinnerin oder den Gewinner zu benachrichtigen. Die Namen der drei Bestplatzierten werden vor Ort auf der Leinwand gezeigt. Wir löschen die Daten spätestens 30 Tage nach der Veranstaltung. Fragen an info@meinerg.de.</p>
+<p><b>Datenschutz:</b> Name und Handynummer verwenden wir nur für dieses Quiz und um die Gewinnerin oder den Gewinner zu benachrichtigen. Wir löschen die Daten spätestens 30 Tage nach der Veranstaltung. Fragen an info@meinerg.de.</p>
 </details>`;
 
-function errHtml() { return errorMsg ? `<div class="error" role="alert">${esc(errorMsg)}</div>` : ''; }
-
-function clearProgress() {
-  questions = null; answers = []; perms = []; cur = 0;
-  store.del('quiz.progress');
+const NICK_A = ['Turbo', 'Rendite', 'Carrera', 'Boxer', 'Zins', 'AfA', 'Spoiler', 'Grundschuld', 'Tilgungs', 'Dachdecker', 'Cashflow', 'Altbau', 'Penthouse', 'Leerstand'];
+const NICK_B = ['Fuchs', 'Hai', 'Rakete', 'König', 'Queen', 'Profi', 'Blitz', 'Tiger', 'Held', 'Baron', 'Pilot', 'Legende'];
+function randomNick() {
+  const a = NICK_A[Math.floor(Math.random() * NICK_A.length)];
+  const b = NICK_B[Math.floor(Math.random() * NICK_B.length)];
+  return a + '-' + b;
 }
-function saveProgress() { store.set('quiz.progress', { round: state.round, answers, perms }); }
 
-function shuffle(a) {
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-  return a;
+function errHtml() { return errorMsg ? `<div class="error" role="alert">${esc(errorMsg)}</div>` : ''; }
+function topbar() {
+  return `<div class="topbar"><img src="logo.svg" alt="R&amp;G Zeit für Neues.">${me ? `<span class="nick">${esc(me.nickname)}</span>` : ''}</div>`;
+}
+function remainingMs() {
+  if (!state || !state.q_started_at) return 0;
+  return state.q_seconds * 1000 - (Date.now() + offset - Date.parse(state.q_started_at));
 }
 
 function determineView() {
   if (!state) return 'loading';
-  if (result) return 'done';
   if (!me) return state.status === 'closed' ? 'closed' : 'join';
   if (state.status === 'lobby') return 'wait';
-  if (state.status === 'running') return 'quiz';
-  return 'closed';
+  if (state.status === 'closed') return 'final';
+  if (state.phase === 'reveal') return 'reveal';
+  const answered = (state.me && state.me.answered) || (pending && pending.pos === state.pos);
+  if (answered) return 'answered';
+  return remainingMs() <= 0 ? 'timeout' : 'question';
 }
 
 async function poll() {
   try {
-    const s = await rpc('quiz_get_state');
+    const s = await rpc('quiz_status', { p_token: me ? me.token : null });
     offset = new Date(s.server_now).getTime() - Date.now();
-    const changed = !state || state.status !== s.status || state.round !== s.round;
+    if (state && state.pos !== s.pos) errorMsg = '';
     state = s;
-    if (me && me.round !== s.round) { me = null; store.del('quiz.me'); clearProgress(); changed || render(); }
-    if (result && result.round !== s.round) { result = null; store.del('quiz.result'); changed || render(); }
-    if (changed) render(); else updateLive();
-  } catch (e) { /* nächster Versuch in 2 s */ }
-  setTimeout(poll, 2000);
+    if (me && (me.round !== s.round || (s.me && s.me.unknown))) { me = null; store.del('quiz.me'); }
+    if (pending && pending.pos !== s.pos) pending = null;
+    render();
+  } catch (e) { /* nächster Versuch */ }
+  setTimeout(poll, 1500);
+}
+
+function render(force) {
+  const v = determineView();
+  const m = state && state.me ? state.me : {};
+  const key = [v, state && state.round, state && state.pos, v === 'join' && state ? state.status : '',
+               m.rang, m.score, m.correct, errorMsg].join('|');
+  if (!force && key === lastKey) { updateLive(); return; }
+  lastKey = key;
+  stopTick();
+  if (v === 'loading') app.innerHTML = '<div class="card center"><p class="pulse">Verbinde …</p></div>';
+  else if (v === 'join') renderJoin();
+  else if (v === 'wait') renderWait();
+  else if (v === 'question') renderQuestion();
+  else if (v === 'answered') renderAnswered();
+  else if (v === 'timeout') renderTimeout();
+  else if (v === 'reveal') renderReveal();
+  else if (v === 'final') renderFinal();
+  else renderClosed();
+  window.scrollTo(0, 0);
 }
 
 function updateLive() {
@@ -85,47 +107,52 @@ function updateLive() {
   if (p && state) p.textContent = state.players;
 }
 
-function stopTimer() { if (timerHandle) { clearInterval(timerHandle); timerHandle = null; } }
-function startTimer() {
-  stopTimer();
+function stopTick() { if (tickHandle) { clearInterval(tickHandle); tickHandle = null; } }
+function startTick() {
+  stopTick();
   const tick = () => {
-    const el = document.getElementById('timer');
-    if (el && state && state.started_at) el.textContent = fmtTime(Date.now() + offset - Date.parse(state.started_at));
+    const rem = remainingMs();
+    const bar = document.getElementById('bar');
+    const sec = document.getElementById('sec');
+    if (bar) {
+      bar.firstElementChild.style.width = Math.max(0, Math.min(100, rem / (state.q_seconds * 10))) + '%';
+      bar.classList.toggle('low', rem < 5000);
+    }
+    if (sec) sec.textContent = Math.max(0, Math.ceil(rem / 1000)) + ' s';
+    if (rem <= 0 && determineView() === 'timeout') render();
   };
   tick();
-  timerHandle = setInterval(tick, 100);
-}
-
-function render() {
-  stopTimer();
-  const v = determineView();
-  if (v === 'loading') app.innerHTML = '<div class="card center"><p class="pulse">Verbinde …</p></div>';
-  else if (v === 'join') renderJoin();
-  else if (v === 'wait') renderWait();
-  else if (v === 'quiz') renderQuiz();
-  else if (v === 'done') renderDone();
-  else renderClosed();
+  tickHandle = setInterval(tick, 100);
 }
 
 function renderJoin() {
-  const prev = {
-    name: (document.getElementById('name') || {}).value || '',
-    phone: (document.getElementById('phone') || {}).value || '',
-    ok: (document.getElementById('ok') || {}).checked || false
-  };
+  const val = id => (document.getElementById(id) || {}).value || '';
+  const prev = { name: val('name'), phone: val('phone'), nick: val('nickname'), ok: (document.getElementById('ok') || {}).checked || false };
   const running = state.status === 'running';
   app.innerHTML = `
-    <p class="eyebrow">Immobilienstammtisch Hagen · Porsche Zentrum</p>
+    <div class="hero">
+      <div class="logo">
+        <img src="logo-white.svg" alt="R&amp;G Zeit für Neues.">
+        <p class="eyebrow">Immobilienstammtisch Hagen · Porsche Zentrum</p>
+      </div>
+      <div class="car"><img src="porsche.jpg" alt="Porsche 911" onerror="this.parentNode.remove()"></div>
+    </div>
     <h1>Das Porsche-Quiz</h1>
-    <p>${state.total || 10} Fragen zu den Vorträgen des Abends. Wer die meisten Fragen richtig hat und dabei am schnellsten ist, gewinnt eine <b>Probefahrt im Porsche</b>.</p>
-    ${running ? '<div class="error">Das Quiz läuft schon. Schnell anmelden, die Zeit zählt ab dem Start!</div>' : ''}
+    <p>${state.total || 10} Fragen zu den Vorträgen des Abends, eine nach der anderen. Wer die meisten richtig hat und am schnellsten antwortet, gewinnt eine <b>Probefahrt im Porsche</b>.</p>
+    ${running ? '<div class="error">Das Quiz läuft schon. Schnell anmelden, du steigst bei der aktuellen Frage ein!</div>' : ''}
     <div class="card">
       <form id="f" novalidate>
+        <label for="nickname">Dein Nickname für die Leinwand</label>
+        <div class="row">
+          <input id="nickname" type="text" maxlength="20" autocomplete="off" placeholder="z. B. Turbo-Fuchs">
+          <button type="button" class="dice" id="dice" aria-label="Nickname vorschlagen">🎲</button>
+        </div>
+        <p class="hint">Nur der Nickname erscheint vorne. Niemand weiß, wer dahintersteckt.</p>
         <label for="name">Vor- und Nachname</label>
         <input id="name" type="text" autocomplete="name" maxlength="60">
         <label for="phone">Handynummer</label>
         <input id="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="25">
-        <p class="muted" style="font-size:13px;margin-top:6px">Nur damit wir die Gewinnerin oder den Gewinner erreichen.</p>
+        <p class="hint">Name und Nummer bleiben privat. Wir brauchen sie nur, um den Gewinner zu erreichen.</p>
         <label class="check"><input id="ok" type="checkbox"><span>Ich habe die Teilnahmebedingungen und den Datenschutzhinweis gelesen und bin einverstanden.</span></label>
         ${errHtml()}
         <button class="btn" id="go" type="submit">Mitmachen</button>
@@ -134,176 +161,138 @@ function renderJoin() {
     </div>`;
   document.getElementById('name').value = prev.name;
   document.getElementById('phone').value = prev.phone;
+  document.getElementById('nickname').value = prev.nick;
   document.getElementById('ok').checked = prev.ok;
+  document.getElementById('dice').onclick = () => { document.getElementById('nickname').value = randomNick(); };
   document.getElementById('f').onsubmit = async ev => {
     ev.preventDefault();
     if (busy) return;
-    const name = document.getElementById('name').value.trim();
-    const phone = document.getElementById('phone').value.trim();
-    if (!document.getElementById('ok').checked) { errorMsg = 'Bitte bestätige die Teilnahmebedingungen.'; render(); return; }
+    if (!document.getElementById('ok').checked) { errorMsg = 'Bitte bestätige die Teilnahmebedingungen.'; render(true); return; }
     busy = true;
     const btn = document.getElementById('go');
     btn.disabled = true; btn.textContent = 'Einen Moment …';
     try {
-      const r = await rpc('quiz_join', { p_name: name, p_phone: phone });
-      me = { token: r.token, name: r.name, round: state.round };
+      const r = await rpc('quiz_join', {
+        p_name: val('name').trim(), p_phone: val('phone').trim(), p_nickname: val('nickname').trim()
+      });
+      me = { token: r.token, nickname: r.nickname, round: state.round };
       store.set('quiz.me', me);
       errorMsg = '';
+      state = await rpc('quiz_status', { p_token: me.token });
     } catch (e) { errorMsg = e.message; }
     busy = false;
-    render();
+    render(true);
   };
 }
 
 function renderWait() {
-  app.innerHTML = `
+  app.innerHTML = `${topbar()}
     <div class="card dark center">
       <p class="eyebrow" style="color:var(--teal-light)">Du bist dabei</p>
-      <h2>Hallo ${esc(me.name)}!</h2>
-      <p class="pulse">Gleich geht's los. Die Fragen erscheinen automatisch, sobald das Quiz vorne gestartet wird.</p>
-      <p class="muted"><span id="players">${state.players}</span> Teilnehmende angemeldet</p>
+      <h2>${esc(me.nickname)}</h2>
+      <p class="pulse">Gleich geht's los. Die erste Frage erscheint automatisch.</p>
+      <p class="muted" style="margin:0"><span id="players">${state.players}</span> Teilnehmende angemeldet</p>
     </div>
     <div class="card">
       <p><b>So funktioniert's</b></p>
       <ul style="padding-left:18px;line-height:1.5;margin:0">
-        <li>Antwort antippen, dann geht es automatisch weiter.</li>
-        <li>Über die Kästchen oben springst du zu jeder Frage zurück.</li>
-        <li>Am Ende einmal abschicken. Die Zeit läuft für alle ab dem gleichen Moment.</li>
+        <li>Vorne wird jede Frage einzeln freigegeben.</li>
+        <li>Du hast ${state.q_seconds} Sekunden. Je schneller du richtig antwortest, desto besser.</li>
+        <li>Nach jeder Frage siehst du vorne die Rangliste mit allen Nicknames.</li>
       </ul>
     </div>`;
 }
 
-async function loadQuestions() {
-  if (loading) return;
-  loading = true;
+function renderQuestion() {
+  const q = state.question;
+  app.innerHTML = `${topbar()}
+    <div class="qhead"><span>Frage ${q.pos} / ${state.total}</span><span id="sec"></span></div>
+    <div class="bar" id="bar"><i></i></div>
+    <p class="question">${esc(q.question)}</p>
+    ${q.options.map((o, i) => `<button class="opt c${i}" data-opt="${i}"><span class="sym">${SYM[i]}</span><span>${esc(o)}</span></button>`).join('')}
+    ${errHtml()}`;
+  startTick();
+}
+
+app.addEventListener('click', async ev => {
+  const btn = ev.target.closest('[data-opt]');
+  if (!btn || !state || !state.question || pending) return;
+  const pos = state.question.pos;
+  const choice = Number(btn.dataset.opt);
+  pending = { pos, choice };
+  errorMsg = '';
+  render(true);
   try {
-    const qs = await rpc('quiz_get_questions', { p_token: me.token });
-    questions = qs;
-    const prog = store.get('quiz.progress');
-    if (prog && prog.round === state.round && Array.isArray(prog.perms) && prog.perms.length === qs.length) {
-      answers = prog.answers; perms = prog.perms;
-    } else {
-      answers = qs.map(() => null);
-      perms = qs.map(q => shuffle(q.options.map((_, i) => i)));
-      saveProgress();
-    }
-    const firstOpen = answers.findIndex(a => a === null);
-    cur = firstOpen === -1 ? qs.length : firstOpen;
-    errorMsg = '';
+    await rpc('quiz_answer', { p_token: me.token, p_pos: pos, p_choice: choice });
   } catch (e) {
-    if (/nicht gefunden/i.test(e.message)) { me = null; store.del('quiz.me'); clearProgress(); }
+    pending = null;
     errorMsg = e.message;
-  }
-  loading = false;
-  render();
-}
-
-function renderQuiz() {
-  if (!questions) {
-    app.innerHTML = errorMsg
-      ? `${errHtml()}<button class="btn" id="retry">Erneut versuchen</button>`
-      : '<div class="card center"><p class="pulse">Fragen werden geladen …</p></div>';
-    const r = document.getElementById('retry');
-    if (r) r.onclick = () => { errorMsg = ''; render(); };
-    if (!errorMsg) loadQuestions();
-    return;
-  }
-  const n = questions.length;
-  let html = `
-    <div class="qhead"><span>${cur < n ? 'Frage ' + (cur + 1) + ' / ' + n : 'Übersicht'}</span><span class="timer" id="timer">0:00,0</span></div>
-    <div class="dots" style="grid-template-columns:repeat(${n},1fr)">
-      ${questions.map((q, i) => `<button class="dot${answers[i] !== null ? ' done' : ''}${i === cur ? ' cur' : ''}" data-go="${i}" aria-label="Frage ${i + 1}">${i + 1}</button>`).join('')}
-    </div>`;
-  if (cur < n) {
-    const q = questions[cur];
-    html += `
-      <div class="card">
-        <p class="question">${esc(q.question)}</p>
-        ${perms[cur].map(oi => `<button class="opt${answers[cur] === oi ? ' sel' : ''}" data-opt="${oi}">${esc(q.options[oi])}</button>`).join('')}
-      </div>
-      <div class="nav">
-        <button class="btn ghost" data-go="${cur - 1}" ${cur === 0 ? 'disabled' : ''}>Zurück</button>
-        <button class="btn ghost" data-go="${cur + 1}">${cur === n - 1 ? 'Übersicht' : 'Weiter'}</button>
-      </div>`;
-  } else {
-    const missing = answers.filter(a => a === null).length;
-    html += `
-      <div class="card">
-        <h2>${missing ? 'Noch ' + missing + (missing === 1 ? ' Frage' : ' Fragen') + ' offen' : 'Alles beantwortet!'}</h2>
-        <ol class="review" style="padding-left:20px">
-          ${questions.map((q, i) => `<li><a href="#" data-go="${i}" style="color:inherit">${answers[i] === null ? '<span class="miss">offen</span>' : esc(q.options[answers[i]])}</a></li>`).join('')}
-        </ol>
-        ${errHtml()}
-        <button class="btn teal" id="submit" ${missing ? 'disabled' : ''}>Jetzt abschicken</button>
-        <p class="muted" style="font-size:13px;margin:10px 0 0">Nach dem Abschicken sind keine Änderungen mehr möglich.</p>
-      </div>`;
-  }
-  app.innerHTML = html;
-  startTimer();
-  const s = document.getElementById('submit');
-  if (s) s.onclick = submit;
-}
-
-app.addEventListener('click', ev => {
-  const go = ev.target.closest('[data-go]');
-  if (go && !go.disabled) {
-    ev.preventDefault();
-    if (advanceHandle) { clearTimeout(advanceHandle); advanceHandle = null; }
-    cur = Math.max(0, Math.min(questions.length, Number(go.dataset.go)));
-    render();
-    window.scrollTo(0, 0);
-    return;
-  }
-  const opt = ev.target.closest('[data-opt]');
-  if (opt && questions) {
-    answers[cur] = Number(opt.dataset.opt);
-    saveProgress();
-    render();
-    if (advanceHandle) clearTimeout(advanceHandle);
-    advanceHandle = setTimeout(() => {
-      advanceHandle = null;
-      const n = questions.length;
-      let next = -1;
-      for (let i = cur + 1; i < n; i++) if (answers[i] === null) { next = i; break; }
-      if (next === -1) next = answers.findIndex(a => a === null);
-      cur = next === -1 ? n : next;
-      render();
-      window.scrollTo(0, 0);
-    }, 260);
+    render(true);
   }
 });
 
-async function submit() {
-  if (busy) return;
-  busy = true;
-  const btn = document.getElementById('submit');
-  if (btn) { btn.disabled = true; btn.textContent = 'Wird abgeschickt …'; }
-  try {
-    const r = await rpc('quiz_submit', { p_token: me.token, p_answers: answers });
-    result = Object.assign({}, r, { round: state.round });
-    store.set('quiz.result', result);
-    errorMsg = '';
-  } catch (e) { errorMsg = e.message; }
-  busy = false;
-  render();
+function chosenChoice() {
+  if (state.me && state.me.choice != null) return state.me.choice;
+  if (pending && pending.pos === state.pos) return pending.choice;
+  return null;
 }
 
-function renderDone() {
-  app.innerHTML = `
+function renderAnswered() {
+  const q = state.question;
+  const c = chosenChoice();
+  app.innerHTML = `${topbar()}
+    <div class="qhead"><span>Frage ${q.pos} / ${state.total}</span><span id="sec"></span></div>
+    <div class="bar" id="bar"><i></i></div>
     <div class="card dark center">
-      <p class="eyebrow" style="color:var(--teal-light)">Abgegeben</p>
-      <div class="big">${result.score} / ${result.total}</div>
-      <p style="margin-top:10px">richtig in <b>${fmtTime(result.duration_ms)}</b> Minuten</p>
-    </div>
-    <div class="card center">
-      <p>${state.status === 'closed'
-        ? 'Das Quiz ist beendet. Die Auflösung gibt es jetzt vorne!'
-        : 'Danke fürs Mitmachen! Sobald alle fertig sind, wird vorne aufgelöst.'}</p>
+      <p class="eyebrow" style="color:var(--teal-light)">Antwort ist drin</p>
+      ${c != null ? `<div class="opt c${c}" style="cursor:default;justify-content:center"><span class="sym">${SYM[c]}</span><span>${esc(q.options[c])}</span></div>` : ''}
+      <p class="pulse" style="margin:8px 0 0">Warte auf die Auflösung …</p>
+    </div>`;
+  startTick();
+}
+
+function renderTimeout() {
+  app.innerHTML = `${topbar()}
+    <div class="card dark center">
+      <div class="verdict">⏱</div>
+      <h2>Zeit abgelaufen</h2>
+      <p class="muted" style="margin:0">Diese Frage zählt leider als falsch. Warte auf die Auflösung.</p>
     </div>`;
 }
 
+function renderReveal() {
+  const q = state.question;
+  const m = state.me || {};
+  const verdict = m.correct === true ? '<div class="verdict ok">✓</div><h2>Richtig!</h2>'
+    : m.correct === false ? '<div class="verdict">✗</div><h2>Leider falsch</h2>'
+    : '<div class="verdict">⏱</div><h2>Keine Antwort</h2>';
+  app.innerHTML = `${topbar()}
+    <div class="card dark center">
+      ${verdict}
+      <p class="muted">Richtig war:</p>
+      <div class="opt c${q.correct}" style="cursor:default;justify-content:center"><span class="sym">${SYM[q.correct]}</span><span>${esc(q.options[q.correct])}</span></div>
+    </div>
+    <div class="card center">
+      <p class="eyebrow">Dein Zwischenstand</p>
+      <div class="big">Platz ${m.rang || '–'}</div>
+      <p style="margin-top:10px">von ${state.players} · ${m.score || 0} von ${q.pos} richtig</p>
+      <p class="muted" style="margin:0">${q.pos < state.total ? 'Gleich kommt die nächste Frage.' : 'Das war die letzte Frage!'}</p>
+    </div>`;
+}
+
+function renderFinal() {
+  const m = state.me || {};
+  app.innerHTML = `${topbar()}
+    <div class="card dark center">
+      <p class="eyebrow" style="color:var(--teal-light)">Endstand</p>
+      <div class="big">Platz ${m.rang || '–'}</div>
+      <p style="margin-top:10px">von ${state.players} · ${m.score || 0} von ${state.total} richtig · ${fmtTime(m.total_ms)}</p>
+    </div>
+    <div class="card center"><p style="margin:0">Danke fürs Mitmachen! Wer hinter dem Sieger-Nickname steckt, wird jetzt vorne enthüllt.</p></div>`;
+}
+
 function renderClosed() {
-  app.innerHTML = `
+  app.innerHTML = `<div class="topbar"><img src="logo.svg" alt="R&amp;G Zeit für Neues."></div>
     <div class="card dark center">
       <h2>Das Quiz ist beendet</h2>
       <p class="muted" style="margin:0">Danke fürs Vorbeischauen. Die Auflösung gibt es vorne.</p>

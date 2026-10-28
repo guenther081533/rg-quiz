@@ -11,51 +11,84 @@
 <link rel="stylesheet" href="app.css">
 <style>
   body.stage { background: var(--navy); color: #f2f0eb; }
-  .stage .brand b { color: #f2f0eb; }
-  .stage .brand span { color: var(--teal-light); }
-  .stagewrap { max-width: 1400px; margin: 0 auto; padding: 28px 40px; min-height: 100vh; display: flex; flex-direction: column; }
+  .stagewrap { max-width: 1500px; margin: 0 auto; padding: 24px 40px; min-height: 100vh; display: flex; flex-direction: column; }
+  .stagelogo { height: 64px; width: auto; display: block; margin-bottom: 18px; }
   .grid { display: grid; grid-template-columns: minmax(280px, 420px) 1fr; gap: 48px; align-items: center; flex: 1; }
   .qrbox { background: #fff; border-radius: 20px; padding: 22px; text-align: center; color: var(--navy); }
-  .qrbox #qr { display: flex; justify-content: center; }
-  .qrbox #qr img, .qrbox #qr canvas { width: 100% !important; height: auto !important; max-width: 360px; }
-  .qrbox .url { font-weight: 800; font-size: 22px; margin-top: 14px; word-break: break-all; }
-  .stage h1 { font-size: 64px; letter-spacing: -1.5px; margin-bottom: 18px; }
+  .qrbox .qr { display: flex; justify-content: center; }
+  .qrbox .qr img, .qrbox .qr canvas { width: 100% !important; height: auto !important; max-width: 360px; }
+  .qrbox .url { font-weight: 800; font-size: 20px; margin-top: 12px; word-break: break-all; }
+  .stage h1 { font-size: 60px; letter-spacing: -1.5px; margin-bottom: 14px; }
   .stage .eyebrow { color: var(--teal-light); font-size: 16px; }
-  .stats { display: flex; gap: 40px; margin: 24px 0 32px; }
-  .stat .num { font-size: 88px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .stats { display: flex; gap: 40px; margin: 18px 0 14px; }
+  .stat .num { font-size: 84px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
   .stat .lbl { color: #b9c3d3; font-weight: 600; margin-top: 6px; }
-  .clock { font-size: 120px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
-  .controls { display: flex; gap: 14px; flex-wrap: wrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 24px; max-height: 190px; overflow: hidden; }
+  .chip { background: var(--navy-2); border-radius: 999px; padding: 7px 14px; font-weight: 700; font-size: 17px; animation: pop .35s ease-out; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } }
+  .controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
   .controls .btn { width: auto; padding: 18px 34px; font-size: 20px; margin: 0; }
   .btn.light { background: #f2f0eb; color: var(--navy); }
-  .footer { display: flex; gap: 18px; justify-content: flex-end; margin-top: 24px; }
+  .secsel { color: #b9c3d3; font-weight: 600; margin-left: 10px; }
+  .secsel button { background: var(--navy-2); color: #f2f0eb; border: 0; border-radius: 8px; padding: 8px 12px; margin-left: 4px; cursor: pointer; font-weight: 700; }
+  .secsel button.on { background: var(--teal); }
+  .footer { display: flex; gap: 18px; justify-content: flex-end; margin-top: 22px; }
   .footer button { background: none; border: 0; color: #7d8aa3; cursor: pointer; font-size: 13px; text-decoration: underline; }
-  .podium { display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 24px; align-items: end; margin: 30px 0; }
-  .place { background: var(--navy-2); border-radius: 20px; padding: 28px 22px; text-align: center; min-height: 220px;
-           display: flex; flex-direction: column; justify-content: center; transition: transform .4s, opacity .4s; }
-  .place.p1 { background: var(--teal); min-height: 290px; }
+  .qtop { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .qtop .answered { font-size: 24px; color: #b9c3d3; font-weight: 600; }
+  .qtop .answered b { color: #fff; font-size: 34px; }
+  .qmain { display: flex; gap: 30px; align-items: center; margin-bottom: 26px; }
+  .qmain h1 { flex: 1; font-size: 46px; line-height: 1.2; margin: 0; }
+  .countdown { flex: none; width: 150px; height: 150px; border-radius: 50%; border: 8px solid var(--teal); display: flex; align-items: center; justify-content: center; font-size: 62px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .countdown.low { border-color: #e0664f; color: #ffb4a6; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .tile { border-radius: 16px; padding: 22px 24px; font-size: 28px; font-weight: 700; color: #fff; display: flex; gap: 16px; align-items: center; position: relative; overflow: hidden; min-height: 96px; }
+  .tile .sym { font-size: 26px; flex: none; }
+  .tile .txt { flex: 1; position: relative; }
+  .tile .cnt { position: relative; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .tile .fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255,255,255,.18); }
+  .tile.dim { opacity: .3; }
+  .tile.win { outline: 5px solid #fff; }
+  .minijoin { display: flex; gap: 14px; align-items: center; color: #b9c3d3; font-size: 15px; }
+  .minijoin .qr img, .minijoin .qr canvas { width: 84px !important; height: 84px !important; border: 6px solid #fff; border-radius: 8px; }
+  .two { display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; flex: 1; }
+  .two h2 { font-size: 30px; }
+  .two .tiles { grid-template-columns: 1fr; gap: 10px; }
+  .two .tile { font-size: 22px; min-height: 64px; padding: 14px 18px; }
+  ol.rank { list-style: none; padding: 0; margin: 0; }
+  ol.rank li { display: grid; grid-template-columns: 54px 1fr 54px 90px 100px; align-items: center; gap: 8px; background: var(--navy-2); border-radius: 12px; padding: 12px 16px; margin-bottom: 8px; font-size: 24px; font-variant-numeric: tabular-nums; animation: pop .35s ease-out both; }
+  ol.rank li:first-child { background: var(--teal); }
+  ol.rank .r { font-weight: 800; }
+  ol.rank .n { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ol.rank .mv { font-size: 18px; font-weight: 700; }
+  ol.rank .up { color: #7fd3a0; } ol.rank .down { color: #ffb4a6; }
+  ol.rank .s, ol.rank .t { text-align: right; color: #dfe5ee; }
+  .podium { display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 24px; align-items: end; margin: 26px 0; }
+  .place { background: var(--navy-2); border-radius: 20px; padding: 28px 22px; text-align: center; min-height: 220px; display: flex; flex-direction: column; justify-content: center; }
+  .place.p1 { background: var(--teal); min-height: 300px; }
   .place.hidden { opacity: .25; }
-  .place .rank { font-size: 22px; font-weight: 700; color: var(--teal-light); }
-  .place.p1 .rank { color: #f2f0eb; }
-  .place .who { font-size: 38px; font-weight: 800; margin: 10px 0; line-height: 1.1; }
+  .place .rk { font-size: 22px; font-weight: 700; color: var(--teal-light); }
+  .place.p1 .rk { color: #f2f0eb; }
+  .place .who { font-size: 40px; font-weight: 800; margin: 10px 0; line-height: 1.1; word-break: break-word; }
   .place .meta { font-size: 20px; color: #dfe5ee; font-variant-numeric: tabular-nums; }
-  table.board { width: 100%; border-collapse: collapse; font-size: 18px; }
-  table.board td { padding: 8px 10px; border-bottom: 1px solid #34466a; font-variant-numeric: tabular-nums; }
+  .place .real { font-size: 26px; font-weight: 700; margin-top: 12px; background: rgba(0,0,0,.18); border-radius: 12px; padding: 10px; }
   .note { color: #b9c3d3; }
-  .gate { max-width: 420px; margin: 18vh auto 0; }
+  .gate { max-width: 420px; margin: 14vh auto 0; color: var(--navy); }
   @media (max-width: 900px) {
-    .stagewrap { padding: 20px 16px; }
-    .grid { grid-template-columns: 1fr; gap: 24px; }
-    .stage h1 { font-size: 40px; }
-    .stat .num { font-size: 56px; }
-    .clock { font-size: 72px; }
+    .stagewrap { padding: 18px 16px; }
+    .grid, .two { grid-template-columns: 1fr; gap: 24px; }
+    .stage h1, .qmain h1 { font-size: 30px; }
+    .tiles { grid-template-columns: 1fr; }
+    .tile { font-size: 18px; min-height: 0; }
+    .countdown { width: 90px; height: 90px; font-size: 36px; }
     .podium { grid-template-columns: 1fr; }
+    ol.rank li { grid-template-columns: 40px 1fr 40px 60px; font-size: 18px; }
+    ol.rank .t { display: none; }
   }
 </style>
 </head>
 <body class="stage">
 <div class="stagewrap">
-  <div class="brand"><b>R&amp;G</b><span>Zeit für Neues.</span></div>
   <div id="app"></div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -63,21 +96,27 @@
 <script>
 const app = document.getElementById('app');
 const PLAYER_URL = new URL('./', location.href).href;
+const SHORT_URL = PLAYER_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
+const SYM = ['▲', '◆', '●', '■'];
 let pin = null;
 try { pin = sessionStorage.getItem('quiz.pin'); } catch (e) { /* privat */ }
 let state = null;
 let offset = 0;
-let board = null;
-let revealed = 0;          // 0 = nichts, 1 = Platz 3, 2 = Platz 2, 3 = Platz 1, 4 = Tabelle
-let view = '';
+let lastKey = '';
 let clockHandle = null;
+let lastNickFetch = 0;
+let revealCache = {};        // pos -> { rows, moves }
+let finalRows = null;
+let finalStep = 0;           // 0 nichts, 1 Platz 3, 2 Platz 2, 3 Platz 1, 4 echter Name, 5 Tabelle
+let winnerName = null;
 
+function loadPrev() { try { return JSON.parse(sessionStorage.getItem('quiz.prev')) || null; } catch (e) { return null; } }
+function savePrev(v) { try { sessionStorage.setItem('quiz.prev', JSON.stringify(v)); } catch (e) { /* privat */ } }
 function savePin(p) { pin = p; try { sessionStorage.setItem('quiz.pin', p); } catch (e) { /* privat */ } }
 
 function renderGate(msg) {
-  view = 'gate';
   app.innerHTML = `
-    <div class="gate card" style="color:var(--navy)">
+    <div class="gate card">
       <h2>Moderation</h2>
       <form id="g">
         <label for="pin">PIN</label>
@@ -97,171 +136,295 @@ function renderGate(msg) {
 async function act(action) {
   try {
     state = await rpc('quiz_host', { p_pin: pin, p_action: action });
-    if (action === 'reset') { board = null; revealed = 0; }
+    if (action === 'reset') { revealCache = {}; finalRows = null; finalStep = 0; winnerName = null; savePrev(null); }
     render(true);
   } catch (e) { alert(e.message); }
 }
 
 let polling = false;
-async function poll() {
+function poll() {
   if (polling) return;
   polling = true;
   const loop = async () => {
     try {
-      const s = await rpc('quiz_get_state');
+      const s = await rpc('quiz_status', { p_token: null });
       offset = new Date(s.server_now).getTime() - Date.now();
-      const changed = !state || s.status !== state.status || s.round !== state.round;
       state = s;
-      if (changed) render(true); else updateLive();
+      render();
+      if (s.status === 'lobby' && Date.now() - lastNickFetch > 3000) refreshNicks();
     } catch (e) { /* nächster Versuch */ }
-    setTimeout(loop, 1500);
+    setTimeout(loop, 1000);
   };
   loop();
+}
+
+function remainingMs() {
+  if (!state || !state.q_started_at) return 0;
+  return state.q_seconds * 1000 - (Date.now() + offset - Date.parse(state.q_started_at));
+}
+
+function render(force) {
+  if (!state) { app.innerHTML = '<p class="pulse">Verbinde …</p>'; return; }
+  const key = [state.status, state.round, state.pos, state.phase, state.q_seconds].join('|');
+  if (!force && key === lastKey) { updateLive(); return; }
+  lastKey = key;
+  stopClock();
+  if (state.status === 'lobby') renderLobby();
+  else if (state.status === 'running' && state.phase === 'open') renderOpen();
+  else if (state.status === 'running') renderReveal();
+  else renderFinal();
 }
 
 function updateLive() {
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('players', state.players);
-  set('submitted', state.submitted);
+  set('answered', state.answered);
 }
 
 function stopClock() { if (clockHandle) { clearInterval(clockHandle); clockHandle = null; } }
 
-function render(force) {
-  stopClock();
-  if (!state) { app.innerHTML = '<p class="pulse">Verbinde …</p>'; return; }
-  if (state.status === 'lobby') renderLobby();
-  else if (state.status === 'running') renderRunning();
-  else renderClosed();
-}
-
-function qrHtml() {
-  return `<div class="qrbox"><div id="qr"></div><div class="url">${esc(PLAYER_URL.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</div></div>`;
-}
-function drawQr() {
-  const el = document.getElementById('qr');
+function drawQr(id, size) {
+  const el = document.getElementById(id);
   if (!el || !window.QRCode) return;
   el.innerHTML = '';
-  new QRCode(el, { text: PLAYER_URL, width: 512, height: 512, colorDark: '#1f2e4a', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+  new QRCode(el, { text: PLAYER_URL, width: size, height: size, colorDark: '#1f2e4a', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
 }
 
 function footer() {
   return `<div class="footer">
+    <button id="rename">Nickname ersetzen</button>
     <button id="contact">Kontakt Gewinner</button>
-    <button id="reset">Testlauf zurücksetzen</button>
+    <button id="reset">Zurücksetzen</button>
     <button id="logout">PIN abmelden</button>
   </div>`;
 }
 function bindFooter() {
   document.getElementById('reset').onclick = () => {
-    const t = prompt('Alle Anmeldungen und Ergebnisse löschen und von vorn beginnen? Zum Bestätigen RESET eintippen.');
+    const t = prompt('Alle Anmeldungen und Antworten löschen und von vorn beginnen? Zum Bestätigen RESET eintippen.');
     if (t === 'RESET') act('reset');
   };
   document.getElementById('logout').onclick = () => { try { sessionStorage.removeItem('quiz.pin'); } catch (e) {} location.reload(); };
-  document.getElementById('contact').onclick = async () => {
-    if (!confirm('Handynummern der Bestplatzierten anzeigen? (Nicht auf dem Beamer zeigen.)')) return;
+  document.getElementById('rename').onclick = async () => {
+    const n = prompt('Welchen Nickname ersetzen? (genau so eintippen, wie er angezeigt wird)');
+    if (!n) return;
     try {
-      const rows = await rpc('quiz_leaderboard', { p_pin: pin, p_with_phone: true });
-      alert(rows.slice(0, 5).map(r => `${r.rang}. ${r.name} · ${r.phone} · ${r.score}/${state.total} · ${fmtTime(r.duration_ms)}`).join('\n') || 'Noch keine Abgaben.');
+      const r = await rpc('quiz_host_rename', { p_pin: pin, p_nickname: n });
+      revealCache = {}; finalRows = null; lastNickFetch = 0;
+      alert(`„${n}“ heißt jetzt „${r.nickname}“.`);
+      render(true);
+    } catch (e) { alert(e.message); }
+  };
+  document.getElementById('contact').onclick = async () => {
+    if (!confirm('Echte Namen und Handynummern der Bestplatzierten anzeigen? (Nicht auf dem Beamer zeigen.)')) return;
+    try {
+      const rows = await rpc('quiz_contacts', { p_pin: pin, p_limit: 5 });
+      alert(rows.map(r => `${r.rang}. ${r.nickname} = ${r.name} · ${r.phone} · ${r.score} richtig · ${fmtTime(r.total_ms)}`).join('\n') || 'Noch niemand dabei.');
     } catch (e) { alert(e.message); }
   };
 }
 
+/* ---------- Lobby ---------- */
 function renderLobby() {
   app.innerHTML = `
     <div class="grid">
-      ${qrHtml()}
+      <div class="qrbox"><div class="qr" id="qr"></div><div class="url">${esc(SHORT_URL)}</div></div>
       <div>
+        <img class="stagelogo" src="logo-white.svg" alt="R&amp;G Zeit für Neues.">
         <p class="eyebrow">Immobilienstammtisch Hagen · Porsche Zentrum</p>
         <h1>Das Porsche-Quiz</h1>
-        <p style="font-size:24px;line-height:1.4">${state.total} Fragen zu den drei Vorträgen. Wer die meisten richtig hat und am schnellsten ist, gewinnt eine <b>Probefahrt im Porsche</b>.</p>
-        <p style="font-size:20px" class="note">QR-Code scannen, Namen und Handynummer eingeben, auf den Start warten.</p>
-        <div class="stats">
-          <div class="stat"><div class="num" id="players">${state.players}</div><div class="lbl">angemeldet</div></div>
+        <p style="font-size:22px;line-height:1.4">QR-Code scannen, Nickname ausdenken, mitspielen. ${state.total} Fragen, ${state.q_seconds} Sekunden pro Frage. Der Sieg bringt eine <b>Probefahrt im Porsche</b>.</p>
+        <div class="stats"><div class="stat"><div class="num" id="players">${state.players}</div><div class="lbl">sind dabei</div></div></div>
+        <div class="chips" id="chips"></div>
+        <div class="controls">
+          <button class="btn teal" id="start">Erste Frage starten</button>
+          <span class="secsel">Zeit pro Frage:${[20, 30, 45, 60].map(s => `<button data-sec="${s}" class="${s === state.q_seconds ? 'on' : ''}">${s} s</button>`).join('')}</span>
         </div>
-        <div class="controls"><button class="btn teal" id="start">Quiz starten</button></div>
       </div>
     </div>
     ${footer()}`;
-  drawQr();
+  drawQr('qr', 512);
   bindFooter();
+  refreshNicks();
   document.getElementById('start').onclick = () => {
-    if (confirm(`Quiz jetzt für alle ${state.players} Angemeldeten starten?`)) act('start');
+    if (confirm(`Erste Frage jetzt für alle ${state.players} freigeben?`)) act('start');
   };
+  app.querySelectorAll('[data-sec]').forEach(b => { b.onclick = () => act('seconds:' + b.dataset.sec); });
 }
 
-function renderRunning() {
+async function refreshNicks() {
+  lastNickFetch = Date.now();
+  try {
+    const rows = await rpc('quiz_ranking', { p_limit: 500 });
+    const el = document.getElementById('chips');
+    if (!el) return;
+    const have = new Set([...el.children].map(c => c.textContent));
+    const want = rows.map(r => r.nickname).reverse().slice(0, 60);
+    if (want.length === have.size && want.every(n => have.has(n))) return;
+    el.innerHTML = want.map(n => `<span class="chip">${esc(n)}</span>`).join('');
+  } catch (e) { /* egal */ }
+}
+
+/* ---------- Frage läuft ---------- */
+function tilesHtml(q, opts) {
+  const dist = q.dist || [0, 0, 0, 0];
+  const max = Math.max(1, ...dist);
+  return `<div class="tiles">${q.options.map((o, i) => {
+    const cls = opts.reveal ? (i === q.correct ? ' win' : ' dim') : '';
+    return `<div class="tile c${i}${cls}">
+      ${opts.reveal ? `<div class="fill" style="width:${Math.round(dist[i] / max * 100)}%"></div>` : ''}
+      <span class="sym">${SYM[i]}</span><span class="txt">${esc(o)}</span>
+      ${opts.reveal ? `<span class="cnt">${dist[i]}</span>` : ''}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function renderOpen() {
+  const q = state.question;
   app.innerHTML = `
-    <div class="grid">
-      ${qrHtml()}
-      <div>
-        <p class="eyebrow">Das Quiz läuft</p>
-        <div class="clock" id="clock">0:00</div>
-        <div class="stats">
-          <div class="stat"><div class="num" id="submitted">${state.submitted}</div><div class="lbl">abgegeben</div></div>
-          <div class="stat"><div class="num" id="players">${state.players}</div><div class="lbl">angemeldet</div></div>
-        </div>
-        <div class="controls"><button class="btn light" id="close">Quiz beenden</button></div>
-      </div>
+    <div class="qtop">
+      <span class="eyebrow">Frage ${q.pos} von ${state.total}</span>
+      <span class="answered"><b id="answered">${state.answered}</b> von <span id="players">${state.players}</span> haben geantwortet</span>
+    </div>
+    <div class="qmain">
+      <h1>${esc(q.question)}</h1>
+      <div class="countdown" id="clock">${state.q_seconds}</div>
+    </div>
+    ${tilesHtml(q, { reveal: false })}
+    <div class="controls" style="justify-content:space-between">
+      <div class="minijoin"><div class="qr" id="miniqr"></div><span>Noch nicht dabei?<br><b style="color:#fff">${esc(SHORT_URL)}</b></span></div>
+      <button class="btn teal" id="reveal">Auflösen</button>
     </div>
     ${footer()}`;
-  drawQr();
+  drawQr('miniqr', 168);
   bindFooter();
   const tick = () => {
     const el = document.getElementById('clock');
     if (!el) return;
-    const ms = Math.max(0, Date.now() + offset - Date.parse(state.started_at));
-    const s = Math.floor(ms / 1000);
-    el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    const rem = remainingMs();
+    el.textContent = Math.max(0, Math.ceil(rem / 1000));
+    el.classList.toggle('low', rem < 5000);
+    const btn = document.getElementById('reveal');
+    if (btn) btn.classList.toggle('pulse', rem <= 0 || state.answered >= state.players);
   };
   tick();
-  clockHandle = setInterval(tick, 250);
-  document.getElementById('close').onclick = () => {
-    const open = state.players - state.submitted;
-    if (confirm(open > 0 ? `${open} haben noch nicht abgegeben. Trotzdem beenden?` : 'Quiz beenden?')) act('close');
+  clockHandle = setInterval(tick, 200);
+  document.getElementById('reveal').onclick = () => {
+    const stillTime = remainingMs() > 0 && state.answered < state.players;
+    if (!stillTime || confirm('Die Zeit läuft noch und nicht alle haben geantwortet. Trotzdem auflösen?')) act('reveal');
   };
 }
 
-async function renderClosed() {
-  if (!board) {
-    app.innerHTML = '<p class="pulse">Ergebnisse werden geladen …</p>';
-    try { board = await rpc('quiz_leaderboard', { p_pin: pin, p_with_phone: false }); }
+/* ---------- Auflösung + Rangliste ---------- */
+async function loadReveal(pos) {
+  if (revealCache[pos]) return revealCache[pos];
+  const rows = await rpc('quiz_ranking', { p_limit: 500 });
+  const prev = loadPrev();
+  const prevMap = prev && prev.round === state.round && prev.pos === pos - 1 ? prev.map : null;
+  const moves = {};
+  rows.forEach(r => {
+    if (!prevMap) return;
+    const before = prevMap[r.nickname];
+    moves[r.nickname] = before == null ? 0 : before - r.rang;
+  });
+  if (!prev || prev.round !== state.round || prev.pos < pos) {
+    const map = {};
+    rows.forEach(r => { map[r.nickname] = r.rang; });
+    savePrev({ round: state.round, pos, map });
+  }
+  revealCache[pos] = { rows, moves };
+  return revealCache[pos];
+}
+
+function moveHtml(m) {
+  if (!m) return '<span class="mv"></span>';
+  return m > 0 ? `<span class="mv up">▲${m}</span>` : `<span class="mv down">▼${-m}</span>`;
+}
+
+async function renderReveal() {
+  const q = state.question;
+  const pos = q.pos;
+  const last = pos >= state.total;
+  app.innerHTML = '<p class="pulse">Auflösung …</p>';
+  let data;
+  try { data = await loadReveal(pos); }
+  catch (e) { app.innerHTML = `<div class="error">${esc(e.message)}</div>`; return; }
+  if (!state || state.pos !== pos || state.phase !== 'reveal') return;
+  app.innerHTML = `
+    <div class="two">
+      <div>
+        <p class="eyebrow">Auflösung Frage ${pos} von ${state.total}</p>
+        <h2>${esc(q.question)}</h2>
+        ${tilesHtml(q, { reveal: true })}
+      </div>
+      <div>
+        <p class="eyebrow">Rangliste nach ${pos} ${pos === 1 ? 'Frage' : 'Fragen'}</p>
+        <ol class="rank">
+          ${data.rows.slice(0, 8).map((r, i) => `<li style="animation-delay:${(7 - i) * 0.12}s">
+            <span class="r">${r.rang}.</span><span class="n">${esc(r.nickname)}</span>${moveHtml(data.moves[r.nickname])}
+            <span class="s">${r.score} ✓</span><span class="t">${fmtTime(r.total_ms)}</span></li>`).join('')}
+        </ol>
+        <p class="note" style="margin-top:10px">${state.players} dabei · Wertung: richtige Antworten, dann Zeit</p>
+      </div>
+    </div>
+    <div class="controls" style="justify-content:flex-end;margin-top:18px">
+      <button class="btn teal" id="next">${last ? 'Zum Endstand' : 'Nächste Frage'}</button>
+    </div>
+    ${footer()}`;
+  bindFooter();
+  document.getElementById('next').onclick = () => act(last ? 'close' : 'next');
+}
+
+/* ---------- Endstand ---------- */
+async function renderFinal() {
+  if (!finalRows) {
+    app.innerHTML = '<p class="pulse">Endstand wird berechnet …</p>';
+    try { finalRows = await rpc('quiz_ranking', { p_limit: 500 }); }
     catch (e) { app.innerHTML = `<div class="error">${esc(e.message)}</div>`; return; }
   }
   const total = state.total;
-  const p = i => board[i];
+  const r = i => finalRows[i];
   const place = (i, cls, visible) => {
-    const r = p(i);
-    if (!r) return `<div class="place ${cls} hidden"><div class="rank">Platz ${i + 1}</div><div class="who">–</div></div>`;
+    const row = r(i);
+    if (!row) return `<div class="place ${cls} hidden"><div class="rk">Platz ${i + 1}</div><div class="who">–</div></div>`;
     return `<div class="place ${cls}${visible ? '' : ' hidden'}">
-      <div class="rank">Platz ${i + 1}</div>
-      <div class="who">${visible ? esc(r.name) : '?'}</div>
-      <div class="meta">${visible ? `${r.score} / ${total} richtig · ${fmtTime(r.duration_ms)}` : '&nbsp;'}</div>
+      <div class="rk">Platz ${i + 1}</div>
+      <div class="who">${visible ? esc(row.nickname) : '?'}</div>
+      <div class="meta">${visible ? `${row.score} / ${total} richtig · ${fmtTime(row.total_ms)}` : '&nbsp;'}</div>
+      ${i === 0 && winnerName ? `<div class="real">${esc(winnerName)}</div>` : ''}
     </div>`;
   };
-  const steps = ['Platz 3 zeigen', 'Platz 2 zeigen', 'Sieger zeigen', 'Ganze Rangliste'];
+  const steps = ['Platz 3 zeigen', 'Platz 2 zeigen', 'Sieger zeigen', 'Wer steckt dahinter?', 'Ganze Rangliste'];
+  let title = 'Und die Probefahrt geht an …';
+  if (finalStep >= 3 && r(0)) title = winnerName ? `${esc(r(0).nickname)} ist ${esc(winnerName)}!` : `Glückwunsch, ${esc(r(0).nickname)}!`;
   let html = `
-    <p class="eyebrow">Siegerehrung</p>
-    <h1>${revealed >= 3 && p(0) ? 'Glückwunsch, ' + esc(p(0).name) + '!' : 'Und die Probefahrt geht an …'}</h1>
+    <img class="stagelogo" src="logo-white.svg" alt="R&amp;G Zeit für Neues.">
+    <p class="eyebrow">Endstand</p>
+    <h1>${title}</h1>
     <div class="podium">
-      ${place(1, 'p2', revealed >= 2)}
-      ${place(0, 'p1', revealed >= 3)}
-      ${place(2, 'p3', revealed >= 1)}
+      ${place(1, 'p2', finalStep >= 2)}
+      ${place(0, 'p1', finalStep >= 3)}
+      ${place(2, 'p3', finalStep >= 1)}
     </div>`;
-  if (revealed >= 4) {
-    html += `<table class="board">${board.slice(0, 10).map(r => `<tr><td>${r.rang}.</td><td>${esc(r.name)}</td><td>${r.score} / ${total}</td><td>${fmtTime(r.duration_ms)}</td></tr>`).join('')}</table>`;
+  if (finalStep >= 5) {
+    html += `<ol class="rank">${finalRows.slice(0, 10).map(x => `<li><span class="r">${x.rang}.</span><span class="n">${esc(x.nickname)}</span><span class="mv"></span><span class="s">${x.score} ✓</span><span class="t">${fmtTime(x.total_ms)}</span></li>`).join('')}</ol>`;
   }
-  html += `<div class="controls" style="margin-top:20px">
-      ${revealed < 4 ? `<button class="btn teal" id="next">${steps[revealed]}</button>` : ''}
-      <button class="btn light" id="reload">Neu laden</button>
+  html += `<div class="controls" style="margin-top:18px">
+      ${finalStep < 5 ? `<button class="btn teal" id="step">${steps[finalStep]}</button>` : ''}
     </div>
-    <p class="note" style="margin-top:14px">${board.length} Abgaben · Wertung: erst richtige Antworten, dann Zeit</p>
     ${footer()}`;
   app.innerHTML = html;
   bindFooter();
-  const n = document.getElementById('next');
-  if (n) n.onclick = () => { revealed++; renderClosed(); };
-  document.getElementById('reload').onclick = () => { board = null; renderClosed(); };
+  const b = document.getElementById('step');
+  if (b) b.onclick = async () => {
+    if (finalStep === 3) {
+      try {
+        const c = await rpc('quiz_contacts', { p_pin: pin, p_limit: 1 });
+        winnerName = c[0] ? c[0].name : null;
+      } catch (e) { alert(e.message); return; }
+    }
+    finalStep++;
+    renderFinal();
+  };
 }
 
 if (pin) poll(); else renderGate();
