@@ -87,4 +87,18 @@ details ul { padding-left: 18px; line-height: 1.5; }
 .opt .sym { font-size: 18px; flex: none; width: 22px; text-align: center; }
 .c0 { background: var(--o0); } .c1 { background: var(--o1); } .c2 { background: var(--o2); } .c3 { background: var(--o3); }
 .verdict { font-size: 64px; line-height: 1; margin-bottom: 8px; }
+
+/* Platz und Mini-Rangliste */
+.move { font-weight: 800; font-size: 18px; margin: 10px 0 0; }
+.move.up { color: var(--ok); } .move.down { color: var(--err); } .move.same { color: var(--muted); }
+.rlist { list-style: none; padding: 0; margin: 0; }
+.rlist li { display: grid; grid-template-columns: 34px 1fr 40px 46px; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 10px; background: #fff; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+.rlist li.me { background: var(--navy); color: #fff; }
+.rlist li.gap { display: block; background: none; text-align: center; padding: 0; color: var(--muted); }
+.rlist .r { font-weight: 800; }
+.rlist .n { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rlist .mv { font-size: 13px; font-weight: 800; text-align: center; }
+.rlist .mv.up { color: var(--ok); } .rlist .mv.down { color: var(--err); } .rlist .mv.same { color: var(--muted); }
+.rlist li.me .mv.up { color: #7fd3a0; } .rlist li.me .mv.down { color: #ffb4a6; } .rlist li.me .mv.same { color: #b9c3d3; }
+.rlist .s { text-align: right; font-weight: 600; }
 .ok { color: #7fd3a0; }

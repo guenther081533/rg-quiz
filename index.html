@@ -51,7 +51,7 @@ function randomNick() {
 
 function errHtml() { return errorMsg ? `<div class="error" role="alert">${esc(errorMsg)}</div>` : ''; }
 function topbar() {
-  return `<div class="topbar"><img src="logo.svg" alt="R&amp;G Zeit für Neues.">${me ? `<span class="nick">${esc(me.nickname)}</span>` : ''}</div>`;
+  return `<div class="topbar"><img src="logo.svg" alt="R&amp;G Zeit für Neues.">${me ? `<span class="nick">${esc(myNick())}</span>` : ''}</div>`;
 }
 function remainingMs() {
   if (!state || !state.q_started_at) return 0;
@@ -260,6 +260,62 @@ function renderTimeout() {
     </div>`;
 }
 
+/* ---------- Platz und Rangliste (Pfeile rechnet der Server: Platz jetzt vs. nach der Vorfrage) ---------- */
+let rankCache = { key: null, rows: null };
+async function getRanking() {
+  const k = [state.round, state.pos, state.status].join('|');
+  if (rankCache.key !== k) rankCache = { key: k, rows: await rpc('quiz_ranking', { p_limit: 500 }) };
+  return rankCache.rows;
+}
+function myNick() { return (state.me && state.me.nickname) || (me && me.nickname) || ''; }
+function mv(r) {
+  if (r.prev == null) return '<span class="mv"></span>';
+  const d = r.prev - r.rang;
+  if (d > 0) return `<span class="mv up">▲${d}</span>`;
+  if (d < 0) return `<span class="mv down">▼${-d}</span>`;
+  return '<span class="mv same">=</span>';
+}
+function moveText(r) {
+  if (!r || r.prev == null) return '';
+  const d = r.prev - r.rang;
+  if (d > 0) return `<p class="move up">▲ ${d} ${d === 1 ? 'Platz' : 'Plätze'} nach oben</p>`;
+  if (d < 0) return `<p class="move down">▼ ${-d} ${d === -1 ? 'Platz' : 'Plätze'} nach unten</p>`;
+  return '<p class="move same">Platz gehalten</p>';
+}
+function rankListHtml(rows) {
+  const mine = rows.findIndex(r => r.nickname === myNick());
+  const idx = new Set([0, 1, 2, 3, 4]);
+  if (mine > 4) [mine - 1, mine, mine + 1].forEach(i => idx.add(i));
+  let html = '<ol class="rlist">';
+  let last = -1;
+  [...idx].filter(i => i >= 0 && i < rows.length).sort((a, b) => a - b).forEach(i => {
+    if (last >= 0 && i > last + 1) html += '<li class="gap">⋯</li>';
+    const r = rows[i];
+    html += `<li class="${i === mine ? 'me' : ''}"><span class="r">${r.rang}.</span><span class="n">${esc(r.nickname)}</span>${mv(r)}<span class="s">${r.score} ✓</span></li>`;
+    last = i;
+  });
+  return html + '</ol>';
+}
+async function fillRanking(subline) {
+  const box = document.getElementById('rankbox');
+  const pos = state.pos, status = state.status;
+  let rows;
+  try { rows = await getRanking(); } catch (e) { return; }
+  if (!box || !document.body.contains(box) || state.pos !== pos || state.status !== status) return;
+  const mine = rows.find(r => r.nickname === myNick());
+  box.innerHTML = `
+    <div class="card center">
+      <p class="eyebrow">${status === 'closed' ? 'Dein Endstand' : 'Dein Zwischenstand'}</p>
+      <div class="big">Platz ${mine ? mine.rang : '–'}</div>
+      ${moveText(mine)}
+      <p style="margin:10px 0 0">von ${rows.length} · ${subline(mine)}</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">Rangliste</p>
+      ${rankListHtml(rows)}
+    </div>`;
+}
+
 function renderReveal() {
   const q = state.question;
   const m = state.me || {};
@@ -272,23 +328,20 @@ function renderReveal() {
       <p class="muted">Richtig war:</p>
       <div class="opt c${q.correct}" style="cursor:default;justify-content:center"><span class="sym">${SYM[q.correct]}</span><span>${esc(q.options[q.correct])}</span></div>
     </div>
-    <div class="card center">
-      <p class="eyebrow">Dein Zwischenstand</p>
-      <div class="big">Platz ${m.rang || '–'}</div>
-      <p style="margin-top:10px">von ${state.players} · ${m.score || 0} von ${q.pos} richtig</p>
-      <p class="muted" style="margin:0">${q.pos < state.total ? 'Gleich kommt die nächste Frage.' : 'Das war die letzte Frage!'}</p>
-    </div>`;
+    <div id="rankbox"><div class="card center"><div class="big">Platz ${m.rang || '–'}</div></div></div>
+    <p class="muted center">${q.pos < state.total ? 'Gleich kommt die nächste Frage.' : 'Das war die letzte Frage!'}</p>`;
+  fillRanking(r => `${r ? r.score : 0} von ${q.pos} richtig`);
 }
 
 function renderFinal() {
   const m = state.me || {};
   app.innerHTML = `${topbar()}
     <div class="card dark center">
-      <p class="eyebrow" style="color:var(--teal-light)">Endstand</p>
-      <div class="big">Platz ${m.rang || '–'}</div>
-      <p style="margin-top:10px">von ${state.players} · ${m.score || 0} von ${state.total} richtig · ${fmtTime(m.total_ms)}</p>
+      <p class="eyebrow" style="color:var(--teal-light)">Quiz beendet</p>
+      <p style="margin:0">Danke fürs Mitmachen! Wer hinter dem Sieger-Nickname steckt, wird jetzt vorne enthüllt.</p>
     </div>
-    <div class="card center"><p style="margin:0">Danke fürs Mitmachen! Wer hinter dem Sieger-Nickname steckt, wird jetzt vorne enthüllt.</p></div>`;
+    <div id="rankbox"><div class="card center"><div class="big">Platz ${m.rang || '–'}</div></div></div>`;
+  fillRanking(r => `${r ? r.score : 0} von ${state.total} richtig · ${fmtTime(r ? r.total_ms : 0)}`);
 }
 
 function renderClosed() {

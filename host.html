@@ -318,25 +318,15 @@ function renderOpen() {
 async function loadReveal(pos) {
   if (revealCache[pos]) return revealCache[pos];
   const rows = await rpc('quiz_ranking', { p_limit: 500 });
-  const prev = loadPrev();
-  const prevMap = prev && prev.round === state.round && prev.pos === pos - 1 ? prev.map : null;
   const moves = {};
-  rows.forEach(r => {
-    if (!prevMap) return;
-    const before = prevMap[r.nickname];
-    moves[r.nickname] = before == null ? 0 : before - r.rang;
-  });
-  if (!prev || prev.round !== state.round || prev.pos < pos) {
-    const map = {};
-    rows.forEach(r => { map[r.nickname] = r.rang; });
-    savePrev({ round: state.round, pos, map });
-  }
+  rows.forEach(r => { moves[r.nickname] = r.prev == null ? null : r.prev - r.rang; });
   revealCache[pos] = { rows, moves };
   return revealCache[pos];
 }
 
 function moveHtml(m) {
-  if (!m) return '<span class="mv"></span>';
+  if (m == null) return '<span class="mv"></span>';
+  if (m === 0) return '<span class="mv" style="color:#b9c3d3">=</span>';
   return m > 0 ? `<span class="mv up">▲${m}</span>` : `<span class="mv down">▼${-m}</span>`;
 }
 
@@ -406,7 +396,7 @@ async function renderFinal() {
       ${place(2, 'p3', finalStep >= 1)}
     </div>`;
   if (finalStep >= 5) {
-    html += `<ol class="rank">${finalRows.slice(0, 10).map(x => `<li><span class="r">${x.rang}.</span><span class="n">${esc(x.nickname)}</span><span class="mv"></span><span class="s">${x.score} ✓</span><span class="t">${fmtTime(x.total_ms)}</span></li>`).join('')}</ol>`;
+    html += `<ol class="rank">${finalRows.slice(0, 10).map(x => `<li><span class="r">${x.rang}.</span><span class="n">${esc(x.nickname)}</span>${moveHtml(x.prev == null ? null : x.prev - x.rang)}<span class="s">${x.score} ✓</span><span class="t">${fmtTime(x.total_ms)}</span></li>`).join('')}</ol>`;
   }
   html += `<div class="controls" style="margin-top:18px">
       ${finalStep < 5 ? `<button class="btn teal" id="step">${steps[finalStep]}</button>` : ''}
