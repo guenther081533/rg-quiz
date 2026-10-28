@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1f2e4a">
+<title>Porsche-Quiz · Immobilienstammtisch Hagen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><b>R&amp;G</b><span>Zeit für Neues.</span></div>
+  <div id="app"><div class="card center"><p class="pulse">Verbinde …</p></div></div>
+</div>
+<script src="app.js"></script>
+<script>
+const app = document.getElementById('app');
+let state = null;
+let offset = 0;                          // Serverzeit minus Gerätezeit
+let me = store.get('quiz.me');           // { token, name, round }
+let result = store.get('quiz.result');   // { score, total, duration_ms, round }
+let questions = null;
+let answers = [];                        // je Frage: Index der Originalantwort oder null
+let perms = [];                          // je Frage: Anzeigereihenfolge der Antworten
+let cur = 0;                             // 0..n-1 Frage, n = Übersicht
+let busy = false;
+let loading = false;
+let errorMsg = '';
+let timerHandle = null;
+let advanceHandle = null;
+
+const TERMS = `
+<details><summary>Teilnahmebedingungen und Datenschutz</summary>
+<ul>
+  <li>Veranstalter des Quiz ist die R&amp;G Wirtschaftskanzlei GmbH, Hagen.</li>
+  <li>Teilnahme ab 18 Jahren, nur für Gäste des Immobilienstammtischs am 28.10.2026 vor Ort. Pro Person und Handynummer eine Teilnahme.</li>
+  <li>Es gewinnt, wer die meisten Fragen richtig beantwortet. Bei Gleichstand entscheidet die kürzere Zeit. Die Zeit misst der Server ab dem gemeinsamen Start.</li>
+  <li>Gewinn ist ein Gutschein für eine Probefahrt im Porsche Zentrum nach Terminabsprache. Voraussetzung ist ein gültiger Führerschein; es gelten die Bedingungen des Porsche Zentrums. Keine Barauszahlung.</li>
+  <li>Der Rechtsweg ist ausgeschlossen.</li>
+</ul>
+<p><b>Datenschutz:</b> Name und Handynummer verwenden wir nur für dieses Quiz und um die Gewinnerin oder den Gewinner zu benachrichtigen. Die Namen der drei Bestplatzierten werden vor Ort auf der Leinwand gezeigt. Wir löschen die Daten spätestens 30 Tage nach der Veranstaltung. Fragen an info@meinerg.de.</p>
+</details>`;
+
+function errHtml() { return errorMsg ? `<div class="error" role="alert">${esc(errorMsg)}</div>` : ''; }
+
+function clearProgress() {
+  questions = null; answers = []; perms = []; cur = 0;
+  store.del('quiz.progress');
+}
+function saveProgress() { store.set('quiz.progress', { round: state.round, answers, perms }); }
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+function determineView() {
+  if (!state) return 'loading';
+  if (result) return 'done';
+  if (!me) return state.status === 'closed' ? 'closed' : 'join';
+  if (state.status === 'lobby') return 'wait';
+  if (state.status === 'running') return 'quiz';
+  return 'closed';
+}
+
+async function poll() {
+  try {
+    const s = await rpc('quiz_get_state');
+    offset = new Date(s.server_now).getTime() - Date.now();
+    const changed = !state || state.status !== s.status || state.round !== s.round;
+    state = s;
+    if (me && me.round !== s.round) { me = null; store.del('quiz.me'); clearProgress(); changed || render(); }
+    if (result && result.round !== s.round) { result = null; store.del('quiz.result'); changed || render(); }
+    if (changed) render(); else updateLive();
+  } catch (e) { /* nächster Versuch in 2 s */ }
+  setTimeout(poll, 2000);
+}
+
+function updateLive() {
+  const p = document.getElementById('players');
+  if (p && state) p.textContent = state.players;
+}
+
+function stopTimer() { if (timerHandle) { clearInterval(timerHandle); timerHandle = null; } }
+function startTimer() {
+  stopTimer();
+  const tick = () => {
+    const el = document.getElementById('timer');
+    if (el && state && state.started_at) el.textContent = fmtTime(Date.now() + offset - Date.parse(state.started_at));
+  };
+  tick();
+  timerHandle = setInterval(tick, 100);
+}
+
+function render() {
+  stopTimer();
+  const v = determineView();
+  if (v === 'loading') app.innerHTML = '<div class="card center"><p class="pulse">Verbinde …</p></div>';
+  else if (v === 'join') renderJoin();
+  else if (v === 'wait') renderWait();
+  else if (v === 'quiz') renderQuiz();
+  else if (v === 'done') renderDone();
+  else renderClosed();
+}
+
+function renderJoin() {
+  const prev = {
+    name: (document.getElementById('name') || {}).value || '',
+    phone: (document.getElementById('phone') || {}).value || '',
+    ok: (document.getElementById('ok') || {}).checked || false
+  };
+  const running = state.status === 'running';
+  app.innerHTML = `
+    <p class="eyebrow">Immobilienstammtisch Hagen · Porsche Zentrum</p>
+    <h1>Das Porsche-Quiz</h1>
+    <p>${state.total || 10} Fragen zu den Vorträgen des Abends. Wer die meisten Fragen richtig hat und dabei am schnellsten ist, gewinnt eine <b>Probefahrt im Porsche</b>.</p>
+    ${running ? '<div class="error">Das Quiz läuft schon. Schnell anmelden, die Zeit zählt ab dem Start!</div>' : ''}
+    <div class="card">
+      <form id="f" novalidate>
+        <label for="name">Vor- und Nachname</label>
+        <input id="name" type="text" autocomplete="name" maxlength="60">
+        <label for="phone">Handynummer</label>
+        <input id="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="25">
+        <p class="muted" style="font-size:13px;margin-top:6px">Nur damit wir die Gewinnerin oder den Gewinner erreichen.</p>
+        <label class="check"><input id="ok" type="checkbox"><span>Ich habe die Teilnahmebedingungen und den Datenschutzhinweis gelesen und bin einverstanden.</span></label>
+        ${errHtml()}
+        <button class="btn" id="go" type="submit">Mitmachen</button>
+      </form>
+      ${TERMS}
+    </div>`;
+  document.getElementById('name').value = prev.name;
+  document.getElementById('phone').value = prev.phone;
+  document.getElementById('ok').checked = prev.ok;
+  document.getElementById('f').onsubmit = async ev => {
+    ev.preventDefault();
+    if (busy) return;
+    const name = document.getElementById('name').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    if (!document.getElementById('ok').checked) { errorMsg = 'Bitte bestätige die Teilnahmebedingungen.'; render(); return; }
+    busy = true;
+    const btn = document.getElementById('go');
+    btn.disabled = true; btn.textContent = 'Einen Moment …';
+    try {
+      const r = await rpc('quiz_join', { p_name: name, p_phone: phone });
+      me = { token: r.token, name: r.name, round: state.round };
+      store.set('quiz.me', me);
+      errorMsg = '';
+    } catch (e) { errorMsg = e.message; }
+    busy = false;
+    render();
+  };
+}
+
+function renderWait() {
+  app.innerHTML = `
+    <div class="card dark center">
+      <p class="eyebrow" style="color:var(--teal-light)">Du bist dabei</p>
+      <h2>Hallo ${esc(me.name)}!</h2>
+      <p class="pulse">Gleich geht's los. Die Fragen erscheinen automatisch, sobald das Quiz vorne gestartet wird.</p>
+      <p class="muted"><span id="players">${state.players}</span> Teilnehmende angemeldet</p>
+    </div>
+    <div class="card">
+      <p><b>So funktioniert's</b></p>
+      <ul style="padding-left:18px;line-height:1.5;margin:0">
+        <li>Antwort antippen, dann geht es automatisch weiter.</li>
+        <li>Über die Kästchen oben springst du zu jeder Frage zurück.</li>
+        <li>Am Ende einmal abschicken. Die Zeit läuft für alle ab dem gleichen Moment.</li>
+      </ul>
+    </div>`;
+}
+
+async function loadQuestions() {
+  if (loading) return;
+  loading = true;
+  try {
+    const qs = await rpc('quiz_get_questions', { p_token: me.token });
+    questions = qs;
+    const prog = store.get('quiz.progress');
+    if (prog && prog.round === state.round && Array.isArray(prog.perms) && prog.perms.length === qs.length) {
+      answers = prog.answers; perms = prog.perms;
+    } else {
+      answers = qs.map(() => null);
+      perms = qs.map(q => shuffle(q.options.map((_, i) => i)));
+      saveProgress();
+    }
+    const firstOpen = answers.findIndex(a => a === null);
+    cur = firstOpen === -1 ? qs.length : firstOpen;
+    errorMsg = '';
+  } catch (e) {
+    if (/nicht gefunden/i.test(e.message)) { me = null; store.del('quiz.me'); clearProgress(); }
+    errorMsg = e.message;
+  }
+  loading = false;
+  render();
+}
+
+function renderQuiz() {
+  if (!questions) {
+    app.innerHTML = errorMsg
+      ? `${errHtml()}<button class="btn" id="retry">Erneut versuchen</button>`
+      : '<div class="card center"><p class="pulse">Fragen werden geladen …</p></div>';
+    const r = document.getElementById('retry');
+    if (r) r.onclick = () => { errorMsg = ''; render(); };
+    if (!errorMsg) loadQuestions();
+    return;
+  }
+  const n = questions.length;
+  let html = `
+    <div class="qhead"><span>${cur < n ? 'Frage ' + (cur + 1) + ' / ' + n : 'Übersicht'}</span><span class="timer" id="timer">0:00,0</span></div>
+    <div class="dots" style="grid-template-columns:repeat(${n},1fr)">
+      ${questions.map((q, i) => `<button class="dot${answers[i] !== null ? ' done' : ''}${i === cur ? ' cur' : ''}" data-go="${i}" aria-label="Frage ${i + 1}">${i + 1}</button>`).join('')}
+    </div>`;
+  if (cur < n) {
+    const q = questions[cur];
+    html += `
+      <div class="card">
+        <p class="question">${esc(q.question)}</p>
+        ${perms[cur].map(oi => `<button class="opt${answers[cur] === oi ? ' sel' : ''}" data-opt="${oi}">${esc(q.options[oi])}</button>`).join('')}
+      </div>
+      <div class="nav">
+        <button class="btn ghost" data-go="${cur - 1}" ${cur === 0 ? 'disabled' : ''}>Zurück</button>
+        <button class="btn ghost" data-go="${cur + 1}">${cur === n - 1 ? 'Übersicht' : 'Weiter'}</button>
+      </div>`;
+  } else {
+    const missing = answers.filter(a => a === null).length;
+    html += `
+      <div class="card">
+        <h2>${missing ? 'Noch ' + missing + (missing === 1 ? ' Frage' : ' Fragen') + ' offen' : 'Alles beantwortet!'}</h2>
+        <ol class="review" style="padding-left:20px">
+          ${questions.map((q, i) => `<li><a href="#" data-go="${i}" style="color:inherit">${answers[i] === null ? '<span class="miss">offen</span>' : esc(q.options[answers[i]])}</a></li>`).join('')}
+        </ol>
+        ${errHtml()}
+        <button class="btn teal" id="submit" ${missing ? 'disabled' : ''}>Jetzt abschicken</button>
+        <p class="muted" style="font-size:13px;margin:10px 0 0">Nach dem Abschicken sind keine Änderungen mehr möglich.</p>
+      </div>`;
+  }
+  app.innerHTML = html;
+  startTimer();
+  const s = document.getElementById('submit');
+  if (s) s.onclick = submit;
+}
+
+app.addEventListener('click', ev => {
+  const go = ev.target.closest('[data-go]');
+  if (go && !go.disabled) {
+    ev.preventDefault();
+    if (advanceHandle) { clearTimeout(advanceHandle); advanceHandle = null; }
+    cur = Math.max(0, Math.min(questions.length, Number(go.dataset.go)));
+    render();
+    window.scrollTo(0, 0);
+    return;
+  }
+  const opt = ev.target.closest('[data-opt]');
+  if (opt && questions) {
+    answers[cur] = Number(opt.dataset.opt);
+    saveProgress();
+    render();
+    if (advanceHandle) clearTimeout(advanceHandle);
+    advanceHandle = setTimeout(() => {
+      advanceHandle = null;
+      const n = questions.length;
+      let next = -1;
+      for (let i = cur + 1; i < n; i++) if (answers[i] === null) { next = i; break; }
+      if (next === -1) next = answers.findIndex(a => a === null);
+      cur = next === -1 ? n : next;
+      render();
+      window.scrollTo(0, 0);
+    }, 260);
+  }
+});
+
+async function submit() {
+  if (busy) return;
+  busy = true;
+  const btn = document.getElementById('submit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Wird abgeschickt …'; }
+  try {
+    const r = await rpc('quiz_submit', { p_token: me.token, p_answers: answers });
+    result = Object.assign({}, r, { round: state.round });
+    store.set('quiz.result', result);
+    errorMsg = '';
+  } catch (e) { errorMsg = e.message; }
+  busy = false;
+  render();
+}
+
+function renderDone() {
+  app.innerHTML = `
+    <div class="card dark center">
+      <p class="eyebrow" style="color:var(--teal-light)">Abgegeben</p>
+      <div class="big">${result.score} / ${result.total}</div>
+      <p style="margin-top:10px">richtig in <b>${fmtTime(result.duration_ms)}</b> Minuten</p>
+    </div>
+    <div class="card center">
+      <p>${state.status === 'closed'
+        ? 'Das Quiz ist beendet. Die Auflösung gibt es jetzt vorne!'
+        : 'Danke fürs Mitmachen! Sobald alle fertig sind, wird vorne aufgelöst.'}</p>
+    </div>`;
+}
+
+function renderClosed() {
+  app.innerHTML = `
+    <div class="card dark center">
+      <h2>Das Quiz ist beendet</h2>
+      <p class="muted" style="margin:0">Danke fürs Vorbeischauen. Die Auflösung gibt es vorne.</p>
+    </div>`;
+}
+
+poll();
+</script>
+</body>
+</html>
