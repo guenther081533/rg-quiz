@@ -73,6 +73,11 @@
   .place .meta { font-size: 20px; color: #dfe5ee; font-variant-numeric: tabular-nums; }
   .place .real { font-size: 26px; font-weight: 700; margin-top: 12px; background: rgba(0,0,0,.18); border-radius: 12px; padding: 10px; }
   .note { color: #b9c3d3; }
+  .headrow { display: flex; gap: 32px; align-items: center; }
+  .headrow > div:first-child { flex: 1; min-width: 0; }
+  .carcard { flex: 0 0 42%; background: var(--studio); border-radius: 18px; overflow: hidden; }
+  .carcard img { width: 100%; height: auto; display: block; }
+  @media (max-width: 900px) { .headrow { flex-direction: column; align-items: stretch; } .carcard { flex-basis: auto; } }
   .gate { max-width: 420px; margin: 14vh auto 0; color: var(--navy); }
   @media (max-width: 900px) {
     .stagewrap { padding: 18px 16px; }
@@ -98,6 +103,7 @@ const app = document.getElementById('app');
 const PLAYER_URL = new URL('./', location.href).href;
 const SHORT_URL = PLAYER_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
 const SYM = ['▲', '◆', '●', '■'];
+const CAR = '<div class="carcard" style="flex-basis:42%"><img src="porsche.avif" alt="Porsche 911" width="930" height="620" onerror="this.parentNode.remove()"></div>';
 let pin = null;
 try { pin = sessionStorage.getItem('quiz.pin'); } catch (e) { /* privat */ }
 let state = null;
@@ -229,9 +235,14 @@ function renderLobby() {
     <div class="grid">
       <div class="qrbox"><div class="qr" id="qr"></div><div class="url">${esc(SHORT_URL)}</div></div>
       <div>
-        <img class="stagelogo" src="logo-white.svg" alt="R&amp;G Zeit für Neues.">
-        <p class="eyebrow">Immobilienstammtisch Hagen · Porsche Zentrum</p>
-        <h1>Das Porsche-Quiz</h1>
+        <div class="headrow">
+          <div>
+            <img class="stagelogo" src="logo-white.svg" alt="R&amp;G Zeit für Neues.">
+            <p class="eyebrow">Immobilienstammtisch Hagen · Porsche Zentrum</p>
+            <h1>Das Porsche-Quiz</h1>
+          </div>
+          ${CAR}
+        </div>
         <p style="font-size:22px;line-height:1.4">QR-Code scannen, Nickname ausdenken, mitspielen. ${state.total} Fragen, ${state.q_seconds} Sekunden pro Frage. Der Sieg bringt eine <b>Probefahrt im Porsche</b>.</p>
         <div class="stats"><div class="stat"><div class="num" id="players">${state.players}</div><div class="lbl">sind dabei</div></div></div>
         <div class="chips" id="chips"></div>
@@ -387,9 +398,14 @@ async function renderFinal() {
   let title = 'Und die Probefahrt geht an …';
   if (finalStep >= 3 && r(0)) title = winnerName ? `${esc(r(0).nickname)} ist ${esc(winnerName)}!` : `Glückwunsch, ${esc(r(0).nickname)}!`;
   let html = `
-    <img class="stagelogo" src="logo-white.svg" alt="R&amp;G Zeit für Neues.">
-    <p class="eyebrow">Endstand</p>
-    <h1>${title}</h1>
+    <div class="headrow">
+      <div>
+        <img class="stagelogo" src="logo-white.svg" alt="R&amp;G Zeit für Neues.">
+        <p class="eyebrow">Endstand</p>
+        <h1>${title}</h1>
+      </div>
+      ${finalStep < 5 ? CAR.replace('42%', '34%') : ''}
+    </div>
     <div class="podium">
       ${place(1, 'p2', finalStep >= 2)}
       ${place(0, 'p1', finalStep >= 3)}
